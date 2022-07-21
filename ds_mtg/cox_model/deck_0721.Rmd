@@ -1,0 +1,354 @@
+---
+title: "Cox Proportional-Hazards Model"
+subtitle: "GEMINI Data Analysis and Design Meeting"
+author: "Charlotte Yuan"
+date: "7/21/2022"
+output:
+  xaringan::moon_reader:
+    css: [xaringan-themer.css,custom_deck.css]
+    nature:
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      ratio: 16:9
+      countIncrementalSlides: true
+    seal: false
+---
+
+class: titleSlide 
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(palmerpenguins)
+library(xaringan)
+library(xaringanthemer)
+library(xaringanExtra)
+
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width=9, fig.height=3.5, fig.retina=3, out.width = "100%", cache = FALSE, echo = TRUE, message = FALSE, warning = FALSE, hiline = TRUE)
+
+hook_source <- knitr::knit_hooks$get('source')
+knitr::knit_hooks$set(source = function(x, options) {
+  x <- stringr::str_replace(x, "^[[:blank:]]?([^*].+?)[[:blank:]]*#<<[[:blank:]]*$", "*\\1")
+  hook_source(x, options)
+})
+```
+
+```{r r xaringan-themer, include=FALSE, warning=FALSE}
+style_duo_accent(
+  primary_color = "#1889c9",
+  secondary_color = "#fec52e",
+  header_font_google = google_font("Source Sans Pro"),
+  text_font_google   = google_font("Libre Franklin", "300", "300i"),
+  code_font_google   = google_font("Anonymous Pro"),
+  base_font_size = "30px",
+  text_font_size = "1rem",
+  header_h1_font_size = "2.5rem",
+  header_h2_font_size = "2rem",
+  header_h3_font_size = "1.25rem",
+  padding = "8px 32px 8px 32px",
+)
+```
+
+
+# `r rmarkdown::metadata$title`
+
+## `r rmarkdown::metadata$subtitle`
+
+### `r rmarkdown::metadata$author`
+
+#### `r rmarkdown::metadata$date`
+
+<br>
+
+---
+
+class: left
+
+# Introduction
+
+* __Cox proportional-hazards model__
+  + To investigate the association between the survival time of patients and one or more predictor variables  
+<br>
+* Recap on  __Survival analysis__ 
+  + Definition of hazard and survival functions 
+  + Construction of Kaplan-Meier survival curves for different patient groups
+  + Logrank test for comparing two or more survival curves
+
+---
+
+class: left
+
+# Basics of Cox model 
+
+* Objective
+  + To evaluate simultaneously the effect of several factors on survival  
+<br> 
+* Hazard function  
+$$h(t)=h_0(t)×exp(b_1x_1+b_2x_2+...+b_px_p)$$
+<br>
+* Interpretation of hazard ratios (HR)
+  + HR = 1: No effect
+  + HR > 1 (i.e.: b > 0): Increase in hazard, bad prognostic factor
+  + HR < 1 (i.e.: b < 0): Reduction in the hazard, good prognostic factor
+
+---
+
+class: center, middle
+
+# Cox model in R
+
+Install and load required R package<br>
+R function to compute the Cox model: coxph()<br>
+Example data sets<br>
+Compute the Cox model<br>
+Check Cox model assumptions<br>
+Visualizing the estimated distribution of survival times<br>
+  
+---
+
+class: left
+
+```{r xaringan-panelset, echo=FALSE}
+xaringanExtra::use_panelset()
+```
+
+### Install and load required R package
+
+.panelset[
+
+.panel[.panel-name[Install]
+
+```{r eval=FALSE}
+install.packages(c("survival", "survminer"))
+```
+]
+
+.panel[.panel-name[Load]
+```{r}
+library("survival")
+library("survminer")
+```
+]
+
+]
+
+---
+
+class: left
+
+### R function to compute the Cox model: coxph()
+
+```{r eval=FALSE}
+coxph(formula, data, method)
+```
+
+* formula: a survival object created using the function Surv(): Surv(time, event)
+* data: a data frame containing the variables
+* method: to specify how to handle ties. The default is ‘efron’. 
+
+---
+
+class: left
+
+.small[
+
+### Example data sets
+
+```{r}
+data("lung")
+head(lung)
+```
+
+.pull-left[
+
+inst: Institution code  
+time: Survival time in days  
+status: censoring status 1=censored, 2=dead  
+age: Age in years  
+sex: Male=1 Female=2  
+
+]
+
+.pull-right[
+
+ph.ecog: ECOG performance score (0=good 5=dead)  
+ph.karno: Karnofsky performance score (bad=0-good=100) rated by physician  
+pat.karno: Karnofsky performance score as rated by patient  
+meal.cal: Calories consumed at meals  
+wt.loss: Weight loss in last six months  
+
+]
+]
+
+---
+
+class: left
+
+### Compute the Cox model
+
+.small[
+
+.panelset[
+
+.panel[.panel-name[Univariate]
+```{r}
+res.cox <- coxph(Surv(time, status) ~ sex, data = lung)
+summary(res.cox)
+```
+
+]
+
+.panel[.panel-name[Multivariate]
+```{r}
+res.cox <- coxph(Surv(time, status) ~ sex + age + ph.ecog, data =  lung)
+summary(res.cox)
+```
+]
+
+]
+
+]
+
+---
+
+class: left
+
+### Cox model assumptions: proportionality
+
+.panelset[
+
+.panel[.panel-name[Code]
+```{r eval=FALSE}
+surv_sex <- survfit(Surv(time, status) ~ sex, data = lung)
+ggsurvplot(surv_sex, 
+           fun = "cloglog", #<<
+           conf.int = TRUE,
+           xlab = "Natural log of time (days)",
+           ylab = "log-log survival",
+           title = "log-log curves by sex",
+           legend = "bottom", 
+           legend.title = "Sex",
+           legend.labs = c("Male", "Female"))
+```
+
+]
+
+.panel[.panel-name[Plot]
+```{r echo=FALSE, fig.height=6, fig.width=16, fig.align="center"}
+surv_sex <- survfit(Surv(time, status) ~ sex, data = lung)
+ggsurvplot(surv_sex, fun = "cloglog",
+           conf.int = TRUE,
+           xlab = "Natural log of time (days)",
+           ylab = "log-log survival",
+           title = "log-log curves by sex",
+           legend = "bottom", 
+           legend.title = "Sex",
+           legend.labs = c("Male", "Female"))
+```
+]
+
+.panel[.panel-name[Time-varying]
+```{r}
+cox_tt <- coxph(Surv(time, status) ~ sex + tt(sex),
+      data = lung, 
+      ties = "breslow",
+      tt = function(x, time,...)x*time) #<<
+summary(cox_tt)
+```
+
+]
+
+]
+
+---
+
+class: left
+
+### Cox model assumptions: nonlinearity
+
+.panelset[
+
+.panel[.panel-name[Test for linearity]
+```{r eval=FALSE}
+ggcoxfunctional(Surv(time, status) ~ age + log(age) + sqrt(age), data = lung)
+```
+]
+
+.panel[.panel-name[Plot]
+```{r echo=FALSE, fig.height=6, fig.width=16, fig.align="center"}
+ggcoxfunctional(Surv(time, status) ~ age + log(age) + sqrt(age), data = lung)
+```
+]
+
+]
+
+---
+
+class: left
+
+### Visualizing hazards ratio of Cox model
+
+.panelset[
+
+.panel[.panel-name[Code]
+```{r eval=FALSE}
+cox1 <- coxph(Surv(time, status) ~ age + sex + ph.ecog + meal.cal + wt.loss, data =  lung)
+summary(cox1)
+hazards <- data.frame(cbind(exp(coef(cox1)), exp(confint(cox1))))
+names(hazards)<-c('HR', 'lower', 'upper')
+hazards$vars<-rep(c("Age","Sex","ECOG Score","Calories Consumed","Weight Loss"),1)
+ggplot(hazards, aes(y= HR, x = reorder(vars, HR))) +
+  geom_hline(yintercept = 1, linetype = "dotted", size = 0.8) +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.2, color = "grey", size = 1) +
+  geom_point(size = 3, color = "#009B96") +
+  coord_flip() +
+  labs(x = 'Predictors of survival time', y = 'Hazards Ratio (95% CI)') +
+  theme_minimal() + 
+  scale_y_continuous(limits = c(0, 3))
+```
+]
+
+.panel[.panel-name[Plot]
+```{r include=FALSE}
+cox1 <- coxph(Surv(time, status) ~ age + sex + ph.ecog + meal.cal + wt.loss, data =  lung)
+summary(cox1)
+hazards <- data.frame(cbind(exp(coef(cox1)), exp(confint(cox1))))
+names(hazards)<-c('HR', 'lower', 'upper')
+hazards$vars<-rep(c("Age","Sex","ECOG Score","Calories Consumed","Weight Loss"),1)
+```
+```{r echo=FALSE, fig.height=6, fig.width=16, fig.align="center"}
+ggplot(hazards, aes(y= HR, x = reorder(vars, HR))) +
+  geom_hline(yintercept = 1, linetype = "dotted", size = 0.8) +
+  geom_errorbar(aes(ymin=lower, ymax=upper), width=.2, color = "grey", size = 1) +
+  geom_point(size = 3, color = "#009B96") +
+  coord_flip() +
+  labs(x = 'Predictors of survival time', y = 'Hazards Ratio (95% CI)') +
+  theme_minimal() + 
+  scale_y_continuous(limits = c(0, 3))
+```
+]
+
+]
+
+---
+
+class: left
+
+### Takeaways
+
+* Cox regression model for assessing the relationship between multiple risk factors and patient’s survival time  
+<br>
+* How to compute the Cox model using the __survival__ package  
+<br>
+* How to visualize the results of the analysis using the __survminer__ package  
+<br>
+
+---
+
+class: center, middle
+
+# Thank you! 
+
+Questions?
+
